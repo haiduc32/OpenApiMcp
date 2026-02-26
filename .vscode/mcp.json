@@ -1,0 +1,13 @@
+{
+  "servers": {
+    "openapi-contracts": {
+      "type": "stdio",
+      "command": "dotnet",
+      "args": [
+        "run",
+        "--project",
+        "${workspaceFolder}/src/OpenApiMcp/OpenApiMcp.csproj"
+      ]
+    }
+  }
+}
