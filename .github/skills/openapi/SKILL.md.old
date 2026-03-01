@@ -1,0 +1,135 @@
+---
+name: openapi
+description: Commands for reading, navigating, searching, and modifying OpenAPI contracts using the openapi CLI. Use this skill when asked about API schemas, paths, or operations, or when asked to add, pdate, delete, or rename any part of an OpenAPI contract.
+---
+
+Use the `openapi` CLI to work with OpenAPI contracts without loading the full file into context.
+Run commands with:
+
+```
+dotnet run --project src/OpenApiMcp.Cli -- <command> [args] [options]
+```
+
+All commands write indented JSON to stdout. Exit code `0` = success, `1` = error.
+Errors are written to stderr as `{"error":{"code":"...","message":"..."}}`.
+
+## Step 1 — Find the contract ID
+
+Always start by listing loaded contracts to get the correct ID:
+
+```bash
+dotnet run --project src/OpenApiMcp.Cli -- contracts
+```
+
+Use the `id` field in all subsequent commands.
+
+## Step 2 — Orient yourself
+
+```bash
+# All paths and schema names
+dotnet run --project src/OpenApiMcp.Cli -- index <contract-id>
+
+# Group paths by tag to understand domain areas
+dotnet run --project src/OpenApiMcp.Cli -- index <contract-id> --tags
+
+# Metadata (info, servers, security, tags)
+dotnet run --project src/OpenApiMcp.Cli -- info <contract-id>
+```
+
+## Read commands
+
+```bash
+# Fragment by JSON Pointer (RFC 6901)
+dotnet run --project src/OpenApiMcp.Cli -- get <contract-id> <pointer>
+dotnet run --project src/OpenApiMcp.Cli -- get <contract-id> /info
+dotnet run --project src/OpenApiMcp.Cli -- get <contract-id> /paths/~1pets/get
+
+# Single operation with $ref resolved
+dotnet run --project src/OpenApiMcp.Cli -- operation <contract-id> <path> <method>
+dotnet run --project src/OpenApiMcp.Cli -- operation my-api /users/{id} get
+
+# Named schema with $ref resolved
+dotnet run --project src/OpenApiMcp.Cli -- schema <contract-id> <name>
+dotnet run --project src/OpenApiMcp.Cli -- schema my-api User --depth 2
+
+# Keyword / regex search
+dotnet run --project src/OpenApiMcp.Cli -- search <contract-id> <query>
+dotnet run --project src/OpenApiMcp.Cli -- search my-api "Order" --scope schemas --max 10
+
+# All operations for a tag
+dotnet run --project src/OpenApiMcp.Cli -- tag-operations <contract-id> <tag>
+
+# Export full contract
+dotnet run --project src/OpenApiMcp.Cli -- export <contract-id>
+dotnet run --project src/OpenApiMcp.Cli -- export <contract-id> --format json
+```
+
+## Write commands
+
+Each write command owns the full lifecycle: open session → apply → validate → commit.
+The document is only updated if the result is a valid OpenAPI contract.
+
+Content arguments accept inline JSON/YAML, `@path/to/file.yaml`, or `-` (stdin).
+
+```bash
+# Add or replace a named schema
+dotnet run --project src/OpenApiMcp.Cli -- add-schema <contract-id> <name> <schema>
+dotnet run --project src/OpenApiMcp.Cli -- add-schema my-api Widget '{"type":"object","properties":{"id":{"type":"integer"}}}'
+
+# Add or replace a full path item
+dotnet run --project src/OpenApiMcp.Cli -- add-path <contract-id> <path> <path-item>
+dotnet run --project src/OpenApiMcp.Cli -- add-path my-api /orders @orders-path.yaml
+
+# Add or replace one operation on an existing path
+dotnet run --project src/OpenApiMcp.Cli -- add-operation <contract-id> <path> <method> <operation>
+dotnet run --project src/OpenApiMcp.Cli -- add-operation my-api /pets post '{"operationId":"createPet","summary":"Create pet","responses":{"201":{"description":"Created"}}}'
+
+# Create or replace any node by JSON Pointer
+dotnet run --project src/OpenApiMcp.Cli -- set <contract-id> <pointer> <content>
+dotnet run --project src/OpenApiMcp.Cli -- set my-api /info/x-owner '{"team":"platform"}'
+
+# Apply a JSON Merge Patch (default) or JSON Patch
+dotnet run --project src/OpenApiMcp.Cli -- patch <contract-id> <pointer> <patch>
+dotnet run --project src/OpenApiMcp.Cli -- patch my-api /info '{"x-env":"prod"}'
+dotnet run --project src/OpenApiMcp.Cli -- patch my-api /info '[{"op":"add","path":"/x-env","value":"prod"}]' --type json-patch
+
+# Remove a node by JSON Pointer
+dotnet run --project src/OpenApiMcp.Cli -- delete <contract-id> <pointer>
+dotnet run --project src/OpenApiMcp.Cli -- delete my-api /components/schemas/DeprecatedDto
+
+# Rename a schema and update all $ref values in one step
+dotnet run --project src/OpenApiMcp.Cli -- rename-schema <contract-id> <old-name> <new-name>
+dotnet run --project src/OpenApiMcp.Cli -- rename-schema my-api OrderDto Order
+```
+
+## Validate
+
+```bash
+dotnet run --project src/OpenApiMcp.Cli -- validate <contract-id>
+dotnet run --project src/OpenApiMcp.Cli -- validate <contract-id> --strict
+```
+
+## JSON Pointer encoding
+
+When constructing pointers manually:
+- Path segment `/pets/{petId}` → `/paths/~1pets~1{petId}` (`/` → `~1`, `~` → `~0`)
+- Use `get` with a pointer to inspect any location before editing it.
+
+## Recommended workflows
+
+### Understand an unfamiliar contract
+1. `contracts` — find the id
+2. `index <id>` — see all paths and schemas
+3. `index <id> --tags` — understand domain groupings
+4. `schema <id> <Name> --depth 2` — inspect a key schema
+5. `operation <id> <path> <method>` — inspect a specific operation
+
+### Add a new feature
+1. `index <id>` — confirm surrounding paths / schemas
+2. `add-schema <id> <Name> '<json>'` — add required types first
+3. `add-path <id> <path> '<json>'` — add the new path, or `add-operation` on an existing one
+4. `validate <id>` — confirm the contract is still valid
+
+### Refactor a schema name
+1. `search <id> <OldName>` — preview all affected locations
+2. `rename-schema <id> <OldName> <NewName>` — rename and update all `$ref` in one step

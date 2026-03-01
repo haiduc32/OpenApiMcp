@@ -1,67 +1,33 @@
-# OpenAPI Contracts MCP Server
+# OpenApiMcp
 
-An **MCP (Model Context Protocol) server** that exposes structured, selective access to large OpenAPI contracts. Instead of loading entire API specifications into an LLM context window, this server provides fragment-level navigation and editing capabilities through a well-defined set of tools and resources.
+Structured, selective access to large OpenAPI contracts — for AI assistants, API tooling, and automated governance workflows.
 
-**Status:** Version 1.0.0 (Draft)
+Enterprise OpenAPI files routinely exceed LLM context windows. This project solves that with two complementary tools built on a shared core library:
 
-## Overview
+| Tool | What it is | Best for |
+|------|-----------|----------|
+| **`src/OpenApiMcp`** | MCP server (stdio) | Copilot / agent workflows via Model Context Protocol |
+| **`src/OpenApiMcp.Cli`** | CLI (`openapi` binary) | Shell scripts, CI, and Copilot skill invocations |
 
-Enterprise OpenAPI contracts frequently exceed the context window limits of language models. This MCP server solves that problem by:
+---
 
-- **Selective Access**: Navigate and query OpenAPI contracts through semantic operations (paths, schemas, operations) rather than raw file content
-- **Fragment-Based Navigation**: Use JSON Pointers (RFC 6901) to address specific subtrees within contracts
-- **Session-Based Editing**: Make incremental edits to contracts with staged changes until committed
-- **Abstract Storage**: Contracts load from local YAML/JSON files with extensible backend support
-- **Efficient Indexing**: Get compact summaries of vast contracts without loading the full document
-
-Perfect for AI assistants, API tooling, contract validation, and automated API governance workflows.
-
-## Architecture
+## Solution Layout
 
 ```
-Program.cs              → Dependency injection & auto-loads contracts from contracts/ directory
-Services/
-  ├─ ContractStore      → In-memory registry; parses YAML/JSON → JsonNode tree
-  ├─ SessionManager     → Thread-safe staged-edit sessions with optimistic concurrency
-  ├─ JsonPointerHelper  → RFC 6901 navigation and $ref resolution
-  ├─ OpenApiValidator   → OpenAPI spec validation
-  └─ ContentSerializer  → YAML/JSON serialization
-Models/
-  ├─ ContractEntry      → Immutable parsed contract with JsonNode document
-  └─ Session            → Mutable working copy with patch audit log
-Tools/ (Five MCP tool classes)
-  ├─ ContractManagementTools  → register, list, get_contract_info, get_contract_index
-  ├─ FragmentTools             → get_fragment, get_operation, get_schema, search_contract, get_tag_operations
-  ├─ SessionTools              → open_session, list_sessions, close_session
-  ├─ WriteTools                → add_operation, add_path, add_schema, set_fragment, patch_fragment, delete_fragment, rename_schema
-  └─ ValidationTools           → validate_session, diff_session, commit_session, export_contract
-Resources/
-  └─ ContractResources    → Four read-only MCP resources at openapi:// URIs
+OpenApiMcp.slnx
+src/
+  OpenApiMcp.Core/          → Shared class library (Models, Services, no MCP dependency)
+  OpenApiMcp/               → MCP server exe
+  OpenApiMcp.Cli/           → CLI exe  (assembly name: openapi)
+tests/
+  OpenApiMcp.IntegrationTests/  → xUnit — MCP tool classes
+  OpenApiMcp.Cli.Tests/         → xUnit — CLI commands (in-process, injected store)
+contracts/                  → Auto-loaded sample contracts (.yaml / .json, OAS 3.0.x)
+.github/skills/openapi/     → GitHub Copilot agent skill (SKILL.md)
+openapi-mcp-spec.md         → Formal specification (authoritative)
 ```
 
-## Features
-
-### Core Capabilities
-
-- **Contract Management**: Register, list, and inspect OpenAPI contracts
-- **Semantic Fragment Queries**: Retrieve operations, schemas, paths, and tags directly
-- **Session-Based Editing**: Stage changes, validate, and commit with full audit trail
-- **JSON Pointer Navigation**: RFC 6901 compliant addressing for precise contract navigation
-- **Reference Resolution**: Automatic `$ref` inlining for readable responses
-- **Validation**: OpenAPI specification compliance checking before commit
-- **Search**: Full-text and regex search across paths, schemas, and operations
-
-### MCP Resources
-
-- **`openapi://contracts`** – List all registered contracts
-- **`openapi://contracts/{id}/info`** – Contract metadata (info, servers, security, tags)
-- **`openapi://contracts/{id}/index`** – Compact navigable index (paths, schemas)
-- **`openapi://contracts/{id}/fragment?pointer={pointer}`** – Any subtree by JSON Pointer
-
-## Requirements
-
-- **.NET 10.0** or **.NET 9.0**
-- **dotnet CLI** (included with .NET SDK)
+---
 
 ## Quick Start
 
@@ -71,246 +37,194 @@ Resources/
 dotnet build
 ```
 
-### Run the MCP Server
-
-```bash
-dotnet run --project src/OpenApiMcp
-```
-
-The server starts in **stdio mode** (standard input/output transport), ready to communicate with MCP clients.
-
-### Run Tests
+### Run tests
 
 ```bash
 dotnet test
 ```
 
-Runs all integration tests using **xunit** and **FluentAssertions**.
+100 tests: 75 MCP integration + 25 CLI in-process.
 
-## Usage
+### Start the MCP server
 
-### Adding Contracts
-
-Place OpenAPI files (`.yaml` or `.json`) in the `contracts/` directory at the repository root. The server auto-discovers them on startup.
-
-Example:
 ```bash
-# Copy your OpenAPI spec to the contracts directory
-cp my-api.yaml contracts/
-
-# Start the server
 dotnet run --project src/OpenApiMcp
 ```
 
-The server searches for contracts in:
-1. Next to the binary (`bin/Debug/net10.0/contracts/`)
-2. The current working directory (`contracts/`)
+Starts in **stdio mode**, ready for any MCP client.
+
+### Use the CLI
+
+```bash
+dotnet run --project src/OpenApiMcp.Cli -- --help
+
+# List loaded contracts
+dotnet run --project src/OpenApiMcp.Cli -- contracts
+
+# Get a schema
+dotnet run --project src/OpenApiMcp.Cli -- schema petstore-sample-api Pet
+
+# Add a schema
+dotnet run --project src/OpenApiMcp.Cli -- add-schema petstore-sample-api Widget \
+  '{"type":"object","properties":{"id":{"type":"integer"}}}'
+```
+
+> See [.github/skills/openapi/SKILL.md](.github/skills/openapi/SKILL.md) for the full CLI command reference.
+
+---
+
+## Contracts
+
+Place OpenAPI files (`.yaml` or `.json`, OAS 3.0.x) in the `contracts/` directory. They are auto-loaded on startup.
+
+The auto-loader searches:
+1. `<binary-dir>/contracts/`
+2. Current working directory `contracts/`
 3. Up to 3 parent directories
 
-### Reading Contracts
+---
 
-**Get a contract's info:**
+## MCP Server
+
+The MCP server exposes **fine-grained tools** so an AI assistant can efficiently navigate and edit any contract without loading the full file.
+
+### MCP Tools
+
+| Class | Tools |
+|-------|-------|
+| `ContractManagementTools` | `register`, `unregister`, `list_contracts`, `get_contract_info`, `get_contract_index` |
+| `FragmentTools` | `get_fragment`, `get_operation`, `get_schema`, `search_contract`, `get_tag_operations` |
+| `SessionTools` | `open_session`, `list_sessions`, `close_session` |
+| `WriteTools` | `set_fragment`, `patch_fragment`, `delete_fragment`, `add_path`, `add_operation`, `add_schema`, `rename_schema` |
+| `ValidationTools` | `validate_session`, `diff_session`, `commit_session`, `export_contract` |
+
+### MCP Resources
+
+| URI | Description |
+|-----|-------------|
+| `openapi://contracts` | List all contracts |
+| `openapi://contracts/{id}/info` | Info, servers, security, tags |
+| `openapi://contracts/{id}/index` | Compact path + schema index |
+| `openapi://contracts/{id}/fragment?pointer={p}` | Any subtree by JSON Pointer |
+
+### VS Code / Claude Desktop config
+
 ```json
 {
-  "name": "get_contract_info",
-  "arguments": {
-    "contract_id": "petstore"
-  }
-}
-```
-
-**Get an operation:**
-```json
-{
-  "name": "get_operation",
-  "arguments": {
-    "contract_id": "petstore",
-    "path": "/pets",
-    "method": "get"
-  }
-}
-```
-
-**Get a schema:**
-```json
-{
-  "name": "get_schema",
-  "arguments": {
-    "contract_id": "petstore",
-    "name": "Pet"
-  }
-}
-```
-
-**Get a fragment by pointer:**
-```json
-{
-  "name": "get_fragment",
-  "arguments": {
-    "contract_id": "petstore",
-    "pointer": "/paths/~1pets/get"
-  }
-}
-```
-
-### Editing Contracts
-
-**Open an edit session:**
-```json
-{
-  "name": "open_session",
-  "arguments": {
-    "contract_id": "petstore",
-    "description": "Add new /users endpoint"
-  }
-}
-```
-
-**Make changes, then validate:**
-```json
-{
-  "name": "validate_session",
-  "arguments": {
-    "session_id": "session-123"
-  }
-}
-```
-
-**Commit changes:**
-```json
-{
-  "name": "commit_session",
-  "arguments": {
-    "session_id": "session-123",
-    "message": "Add new /users endpoint"
-  }
-}
-```
-
-## Development
-
-### Project Structure
-
-```
-OpenApiMcp/
-├── src/
-│   └── OpenApiMcp/
-│       ├── Program.cs                 # Entry point & DI setup
-│       ├── Models/
-│       ├── Services/
-│       ├── Tools/
-│       └── Resources/
-├── tests/
-│   └── OpenApiMcp.IntegrationTests/   # xunit test suite
-├── contracts/                         # Sample OpenAPI files
-├── openapi-mcp-spec.md               # Formal specification
-└── README.md
-```
-
-### Adding a New Tool
-
-1. Create or modify a tool class in `src/OpenApiMcp/Tools/` decorated with `[McpServerToolType]`
-2. Add tool methods with `[McpServerTool, Description("...")]` attributes
-3. Implement using `return Run(() => { ... Ok(result) ... })`
-4. Register in `Program.cs` with `.WithTools<YourToolClass>()`
-5. Add integration tests in `tests/OpenApiMcp.IntegrationTests/`
-
-### Testing
-
-Tests use:
-- **xunit** for test framework
-- **FluentAssertions** for readable assertions
-- **Fixture pattern** for shared test data (see `PetstoreFixture.cs`)
-
-Test files follow the naming convention: `*Tests.cs`
-
-Example test structure:
-```csharp
-public class MyToolTests : IClassFixture<PetstoreFixture>
-{
-    private readonly MyTools _tools;
-    private readonly ContractStore _store;
-
-    public MyToolTests(PetstoreFixture fixture)
-    {
-        _store = fixture.Store;
-        _tools = new MyTools(_store);
+  "mcpServers": {
+    "openapi-mcp": {
+      "command": "dotnet",
+      "args": ["run", "--project", "src/OpenApiMcp"]
     }
-
-    [Fact]
-    public void MyTest_GivenInput_ReturnsExpected()
-    {
-        var result = _tools.MyMethod(...);
-        result.Should().NotBeNull();
-    }
+  }
 }
 ```
 
-## Dependencies
+---
 
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `ModelContextProtocol` | 1.0.0 | MCP protocol implementation |
-| `YamlDotNet` | 16.3.0 | YAML parsing & serialization |
-| `Microsoft.OpenApi.Readers` | 1.6.28 | OpenAPI validation & parsing |
-| `JsonPointer.Net` | 7.0.0 | RFC 6901 pointer addressing |
-| `Microsoft.Extensions.Hosting` | 10.0.3 | Dependency injection & hosting |
+## CLI
 
-## Specification
+The CLI provides **compound commands** — each write command internally manages the full session lifecycle (open → write → validate → commit) so callers never deal with sessions.
 
-See [openapi-mcp-spec.md](openapi-mcp-spec.md) for the complete formal specification including:
-- Tool definitions and signatures
-- Resource descriptions
-- Response envelopes
-- Error handling
-- Validation rules
+### Read commands
 
-## Key Design Patterns
+```
+contracts          List all loaded contracts
+info <id>          Info, servers, security, tags
+index <id>         All paths and schema names  [--tags to group by tag]
+get <id> <ptr>     Fragment by JSON Pointer    [--no-resolve] [--format yaml|json]
+operation <id> <path> <method>
+schema <id> <name>                             [--depth 1-3]
+search <id> <query>                            [--scope all|paths|schemas] [--max N]
+tag-operations <id> <tag>
+export <id>                                    [--format yaml|json]
+```
 
-### Error Handling
+### Write commands
 
-All tools return structured JSON responses. Errors are never thrown to the protocol layer:
+```
+set <id> <pointer> <content>
+patch <id> <pointer> <patch>                   [--type merge|json-patch]
+delete <id> <pointer>
+rename-schema <id> <old> <new>
+add-path <id> <path> <path-item>
+add-operation <id> <path> <method> <operation>
+add-schema <id> <name> <schema>
+```
+
+Content arguments accept inline JSON/YAML, `@file`, or `-` (stdin).
+
+### Contract commands
+
+```
+register --file <path>
+register --content <yaml> --id <id>
+validate <id>                                  [--strict]
+```
+
+---
+
+## Architecture
+
+### Shared Core (`OpenApiMcp.Core`)
+
+All domain logic lives here with no dependency on MCP or CLI:
+
+- `ContractStore` — in-memory registry; parses YAML/JSON → `JsonNode`
+- `SessionManager` — thread-safe staged-edit sessions (optimistic concurrency)
+- `JsonPointerHelper` — RFC 6901 navigation/mutation, RFC 7396 merge patch, RFC 6902 JSON patch, `$ref` resolution
+- `ContentSerializer` — JSON ↔ YAML round-trip, text diff
+- `OpenApiValidator` — OpenAPI 3.0.x spec validation via `Microsoft.OpenApi.Readers`
+- `ContractAutoLoader` — shared startup loader (used by both `Program.cs` files)
+
+### Error envelope
+
+All tools and CLI commands emit a consistent error structure — never throw to the caller:
 
 ```json
 {
   "error": {
     "code": "CONTRACT_NOT_FOUND",
-    "message": "Contract 'foo' not found",
+    "message": "No contract with ID 'foo' exists.",
     "pointer": null
   }
 }
 ```
 
-### In-Memory Form
+---
 
-Contracts are always represented internally as `JsonNode` trees. Navigation and mutation use `JsonPointerHelper` exclusively — never re-parse the document.
+## Development
 
-### Session-Based Editing
+### Dependencies
 
-Write operations require an open session. Sessions deep-clone the contract document into a `StagedDocument`. All mutations happen in the session; the original committed document is untouched until `commit_session`.
+| Package | Version | Used by |
+|---------|---------|---------|
+| `ModelContextProtocol` | 1.0.0 | MCP server |
+| `Microsoft.Extensions.Hosting` | 10.0.3 | MCP server |
+| `System.CommandLine` | 2.0.0-beta4 | CLI |
+| `YamlDotNet` | 16.3.0 | Core |
+| `Microsoft.OpenApi.Readers` | 1.6.28 | Core |
 
-## Contributing
+### Adding a new MCP tool
 
-Contributions are welcome! Please:
+1. Add a method to `src/OpenApiMcp/Tools/*.cs` decorated `[McpServerTool, Description("...")]`
+2. Implement with `return Run(() => { ... Ok(result) ... })`
+3. Register new tool type in `src/OpenApiMcp/Program.cs` with `.WithTools<T>()`
+4. Add tests in `tests/OpenApiMcp.IntegrationTests/`
 
-1. Follow the existing code structure and patterns
-2. Add tests for new features
-3. Update documentation
-4. Ensure all tests pass: `dotnet test`
-5. Build successfully: `dotnet build`
+### Adding a new CLI command
 
-## License
+1. Add a factory method to `src/OpenApiMcp.Cli/Commands/*.cs`
+2. Call `root.AddCommand(...)` from `Register(root, store)`
+3. For writes: use `CliHelper.RunWrite(store, id, description, session => { ... })`
+4. Add tests in `tests/OpenApiMcp.Cli.Tests/` (fresh store for writes, shared `CliFixture` for reads)
 
-[Add your license here — e.g., MIT, Apache 2.0, etc.]
+### Specification
 
-## Support
-
-For issues, questions, or discussions:
-- Check [openapi-mcp-spec.md](openapi-mcp-spec.md) for specification details
-- Review test cases in `tests/OpenApiMcp.IntegrationTests/` for usage examples
-- Open an issue on GitHub
+[openapi-mcp-spec.md](openapi-mcp-spec.md) is the authoritative design document. Section numbers are cited in code comments (e.g. `// §4.3`).
 
 ---
 
-**Version:** 1.0.0 (Draft)  
-**Last Updated:** February 2026
+## License
+
+[Add your license here]

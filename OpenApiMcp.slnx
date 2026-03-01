@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="src\OpenApiMcp.Core\OpenApiMcp.Core.csproj" />
+  <Project Path="src\OpenApiMcp\OpenApiMcp.csproj" />
+  <Project Path="src\OpenApiMcp.Cli\OpenApiMcp.Cli.csproj" />
+  <Project Path="tests\OpenApiMcp.IntegrationTests\OpenApiMcp.IntegrationTests.csproj" />
+  <Project Path="tests\OpenApiMcp.Cli.Tests\OpenApiMcp.Cli.Tests.csproj" />
+</Solution>

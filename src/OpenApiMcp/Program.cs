@@ -38,31 +38,6 @@ builder.Services
 
 var app = builder.Build();
 
-// Auto-load contracts from "contracts" directories in several common locations:
-//   1. Next to the binary (e.g. after publish)
-//   2. Relative to the current working directory (e.g. dotnet run from project dir)
-//   3. Up to 3 parent directories (allows running from repo root or sub-dirs)
-var store = app.Services.GetRequiredService<ContractStore>();
-var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-void TryLoad(string dir)
-{
-    var full = Path.GetFullPath(dir);
-    if (visited.Add(full))
-        store.LoadDirectory(full);
-}
-
-TryLoad(Path.Combine(AppContext.BaseDirectory, "contracts"));
-TryLoad(Path.Combine(Directory.GetCurrentDirectory(), "contracts"));
-
-// Walk up parent directories to find a "contracts" folder
-var search = Directory.GetCurrentDirectory();
-for (int i = 0; i < 3; i++)
-{
-    var parent = Path.GetDirectoryName(search);
-    if (parent is null) break;
-    search = parent;
-    TryLoad(Path.Combine(search, "contracts"));
-}
+ContractAutoLoader.LoadContracts(app.Services.GetRequiredService<ContractStore>());
 
 await app.RunAsync();
