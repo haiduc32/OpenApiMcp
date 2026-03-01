@@ -87,6 +87,81 @@ dotnet test
 
 Runs all integration tests using **xunit** and **FluentAssertions**.
 
+## Packaging and Distribution
+
+### Package as a .NET Tool
+
+The project is configured to publish as a [.NET global tool](https://learn.microsoft.com/en-us/dotnet/core/tools/global-tools). Package it locally or publish to NuGet.
+
+**Pack for local testing or publishing:**
+
+```bash
+dotnet pack src/OpenApiMcp/OpenApiMcp.csproj -c Release -o ./nupkgs
+```
+
+This produces `./nupkgs/OpenApiMcp.1.0.0.nupkg`.
+
+### Install from Local File (Testing)
+
+Test the tool locally before publishing:
+
+```bash
+# Install from local nupkg (global)
+dotnet tool install --global --add-source ./nupkgs OpenApiMcp --version 1.0.0
+
+# Or install as a repo-local tool (requires .config/dotnet-tools.json manifest)
+dotnet new tool-manifest    # run once in repo root
+dotnet tool install --local --add-source ./nupkgs OpenApiMcp --version 1.0.0
+
+# Run the tool
+openapimcp
+```
+
+**Update after repacking:**
+
+```bash
+dotnet tool update --global OpenApiMcp --add-source ./nupkgs --version 1.0.1
+```
+
+**Uninstall:**
+
+```bash
+dotnet tool uninstall --global OpenApiMcp
+```
+
+### Publish to NuGet.org
+
+**Prerequisites:**
+- NuGet.org account
+- API key from https://www.nuget.org/account/ApiKeys
+
+**Push to NuGet.org:**
+
+```bash
+dotnet nuget push ./nupkgs/OpenApiMcp.1.0.0.nupkg \
+  -k <YOUR_NUGET_API_KEY> \
+  -s https://api.nuget.org/v3/index.json
+```
+
+### Install Globally from NuGet.org
+
+Once published, users can install globally:
+
+```bash
+dotnet tool install --global OpenApiMcp --version 1.0.0
+
+# Run the tool
+openapimcp
+```
+
+Or update to a new version:
+
+```bash
+dotnet tool update --global OpenApiMcp
+```
+
+**Note:** This tool is **framework-dependent** and requires .NET 10.0 or .NET 9.0 to be installed.
+
 ## Usage
 
 ### Adding Contracts
