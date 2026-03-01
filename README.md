@@ -60,7 +60,7 @@ Resources/
 
 ## Requirements
 
-- **.NET 10.0** or **.NET 9.0**
+- **.NET 10.0**
 - **dotnet CLI** (included with .NET SDK)
 
 ## Quick Start
@@ -160,7 +160,7 @@ Or update to a new version:
 dotnet tool update --global OpenApiMcp
 ```
 
-**Note:** This tool is **framework-dependent** and requires .NET 10.0 or .NET 9.0 to be installed.
+**Note:** This tool is **framework-dependent** and requires .NET 10.0 to be installed.
 
 ## Usage
 
