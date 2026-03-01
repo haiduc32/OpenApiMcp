@@ -13,6 +13,10 @@
     <Version>1.0.0</Version>
     <ReadmeFile>README.md</ReadmeFile>
 
+    <!-- Source repository link for NuGet.org -->
+    <RepositoryUrl>https://github.com/haiduc32/OpenApiMcp</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <!-- Disable the platform apphost so the test project can reference this without locking the .exe -->
     <UseAppHost>false</UseAppHost>
   </PropertyGroup>
