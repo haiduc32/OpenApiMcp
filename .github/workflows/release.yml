@@ -3,6 +3,8 @@ name: Release NuGet Tool
 on:
   workflow_dispatch:
 
+run-name: Release NuGet Tool - v${{ vars.PACKAGE_VERSION_MAJOR }}.${{ vars.PACKAGE_VERSION_MINOR }}.${{ github.run_number }}
+
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
