@@ -11,6 +11,7 @@
     <ToolCommandName>openapimcpserver</ToolCommandName>
     <PackageId>OpenApiMcpServer</PackageId>
     <Version>1.0.0</Version>
+    <ReadmeFile>README.md</ReadmeFile>
 
     <!-- Disable the platform apphost so the test project can reference this without locking the .exe -->
     <UseAppHost>false</UseAppHost>
@@ -22,6 +23,10 @@
     <PackageReference Include="Microsoft.OpenApi.Readers" Version="1.6.28" />
     <PackageReference Include="ModelContextProtocol" Version="1.0.0" />
     <PackageReference Include="YamlDotNet" Version="16.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 
 </Project>

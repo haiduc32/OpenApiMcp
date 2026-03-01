@@ -1,6 +1,6 @@
 {
   "servers": {
-    "openapi-contracts": {
+    "openapi-contracts-dev": {
       "type": "stdio",
       "command": "dotnet",
       "args": [
@@ -8,6 +8,10 @@
         "--project",
         "${workspaceFolder}/src/OpenApiMcp/OpenApiMcp.csproj"
       ]
+    },
+    "openapi-contracts": {
+      "type": "stdio",
+      "command": "openapimcpserver"
     }
   }
 }

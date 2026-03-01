@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using OpenApiMcp.Resources;
 using OpenApiMcp.Services;
 using OpenApiMcp.Tools;
@@ -7,6 +8,11 @@ using OpenApiMcp.Tools;
 // ── Build host ────────────────────────────────────────────────────────────────
 
 var builder = Host.CreateApplicationBuilder(args);
+
+// ── Logging configuration ──────────────────────────────────────────────────────
+// Disable all logging providers (including console) since we use stdio for MCP
+// and any console output would break the protocol communication
+builder.Logging.ClearProviders();
 
 // ── Core services ─────────────────────────────────────────────────────────────
 
