@@ -52,7 +52,7 @@ jobs:
         run: |
           VERSION="${{ steps.get_version.outputs.version }}"
           TAG="v${VERSION}"
-          PREVIOUS_TAG="$(git tag --sort=-version:refname | grep -Fxv "$TAG" | head -n 1)"
+          PREVIOUS_TAG="$(git tag --sort=-version:refname | awk -v tag="$TAG" '$0 != tag { print; exit }')"
 
           {
             echo "# ${TAG}"
