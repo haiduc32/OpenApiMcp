@@ -96,6 +96,9 @@ public sealed class ValidationToolTests(PetstoreFixture fx) : IClassFixture<Pets
 
         json.HasError().Should().BeFalse();
         var diff = json.Str("diff");
+
+        diff.Should().NotBeNullOrEmpty();
+
         // Full diff should contain some +/- marker lines
         (diff.Contains("+") || diff.Contains("-")).Should().BeTrue("full diff should have changed lines");
     }
@@ -218,6 +221,8 @@ public sealed class ValidationToolTests(PetstoreFixture fx) : IClassFixture<Pets
 
         json.HasError().Should().BeFalse();
         var content = json.Str("content");
+        
+        content.Should().NotBeNullOrEmpty();
         content.TrimStart().Should().StartWith("{");
         content.Should().Contain("\"openapi\"");
     }

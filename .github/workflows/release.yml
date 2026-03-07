@@ -5,6 +5,9 @@ on:
 
 run-name: Release NuGet Tool - v${{ vars.PACKAGE_VERSION_MAJOR }}.${{ vars.PACKAGE_VERSION_MINOR }}.${{ github.run_number }}
 
+permissions:
+  contents: write
+
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
@@ -12,6 +15,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -23,20 +28,49 @@ jobs:
         run: |
           VERSION="${{ vars.PACKAGE_VERSION_MAJOR }}.${{ vars.PACKAGE_VERSION_MINOR }}.${{ github.run_number }}"
           echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Restore dependencies
         run: dotnet restore
 
       - name: Build
-        run: dotnet build -c Release /p:Version=${{ env.VERSION }} /p:AssemblyVersion=${{ env.VERSION }}
+        run: dotnet build -c Release /p:Version=${{ steps.get_version.outputs.version }} /p:AssemblyVersion=${{ steps.get_version.outputs.version }}
 
       - name: Test
         run: dotnet test -c Release --no-build --verbosity normal
 
       - name: Pack
-        run: dotnet pack src/OpenApiMcp/OpenApiMcp.csproj -c Release /p:Version=${{ env.VERSION }} /p:AssemblyVersion=${{ env.VERSION }} --no-build -o ./nupkgs
+        run: dotnet pack src/OpenApiMcp/OpenApiMcp.csproj -c Release /p:Version=${{ steps.get_version.outputs.version }} /p:AssemblyVersion=${{ steps.get_version.outputs.version }} --no-build -o ./nupkgs
 
       - name: Push to NuGet
         run: dotnet nuget push "./nupkgs/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source "https://api.nuget.org/v3/index.json" --skip-duplicate
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+
+      - name: Generate Release Notes
+        shell: bash
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          TAG="v${VERSION}"
+          PREVIOUS_TAG="$(git tag --sort=-version:refname | grep -Fxv "$TAG" | head -n 1)"
+
+          {
+            echo "# ${TAG}"
+            echo
+            echo "## Changes"
+
+            if [ -n "$PREVIOUS_TAG" ]; then
+              git log "${PREVIOUS_TAG}..HEAD" --pretty=format:'- %s%n%b' --no-merges
+            else
+              git log --pretty=format:'- %s%n%b' --no-merges
+            fi
+          } > release-notes.md
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          gh release create "v${VERSION}" \
+            --title "v${VERSION}" \
+            --notes-file release-notes.md
